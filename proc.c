@@ -88,9 +88,10 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+    //Default Priority of a process is set to be 10
 
   release(&ptable.lock);
-
+  p->priority = 4;
   // Allocate kernel stack.
   if((p->kstack = kalloc()) == 0){
     p->state = UNUSED;
@@ -319,26 +320,27 @@ wait(void)
 //  - swtch to start running that process
 //  - eventually that process transfers control
 //      via swtch back to the scheduler.
+
 void
 scheduler(void)
 {
   struct proc *p;
   struct cpu *c = mycpu();
   c->proc = 0;
-  
+
   for(;;){
     // Enable interrupts on this processor.
     sti();
 
-    // Loop over process table looking for process to run.
     acquire(&ptable.lock);
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
+
+#ifdef ROUND_ROBIN
+    // Basic Round Robin Scheduler
+    for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+      if (p->state != RUNNABLE)
         continue;
 
-      // Switch to chosen process.  It is the process's job
-      // to release ptable.lock and then reacquire it
-      // before jumping back to us.
+      // Switch to the next RUNNABLE process in round-robin order
       c->proc = p;
       switchuvm(p);
       p->state = RUNNING;
@@ -347,16 +349,50 @@ scheduler(void)
       switchkvm();
 
       // Process is done running for now.
-      // It should have changed its p->state before coming back.
       c->proc = 0;
     }
-    release(&ptable.lock);
+#else
+    // Priority-based Scheduler
+    struct proc *highP, *p1;
 
+    highP = 0;
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->state != RUNNABLE)
+        continue;
+
+      highP = p;
+      // Find process with the highest priority
+      for(p1 = ptable.proc; p1 < &ptable.proc[NPROC]; p1++){
+        if(p1->state != RUNNABLE)
+          continue;
+        if(highP->priority > p1->priority)   // larger value means lower priority
+          highP = p1;
+      }
+      p = highP;
+
+      // Switch to chosen process
+      c->proc = p;
+      switchuvm(p);
+      p->state = RUNNING;
+
+      /*
+      Save current registers in c->scheduler which points to a struct context
+      Load registers from process's context
+      */
+
+      swtch(&(c->scheduler), p->context);
+      switchkvm();
+
+      // Process is done running for now.
+      c->proc = 0;
+    }
+#endif
+
+    release(&ptable.lock);
   }
 }
 
-// Enter scheduler.  Must hold only ptable.lock
-// and have changed proc->state. Saves and restores
+// Enter scheduler.  Must hold only// and have changed proc->state. Saves and restores
 // intena because intena is a property of this
 // kernel thread, not this CPU. It should
 // be proc->intena and proc->ncli, but that would
@@ -531,4 +567,52 @@ procdump(void)
     }
     cprintf("\n");
   }
+}
+
+int
+cps()
+{
+struct proc *p;
+//Enables interrupts on this processor.
+sti();
+
+//Loop over process table looking for process with pid.
+acquire(&ptable.lock);
+cprintf("name \t pid \t state \t priority \n");
+for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+  if(p->state == SLEEPING)
+	  cprintf("%s \t %d \t SLEEPING \t %d \n ", p->name,p->pid,p->priority);
+	else if(p->state == RUNNING)
+ 	  cprintf("%s \t %d \t RUNNING \t %d \n ", p->name,p->pid,p->priority);
+	else if(p->state == RUNNABLE)
+ 	  cprintf("%s \t %d \t RUNNABLE \t %d \n ", p->name,p->pid,p->priority);
+}
+release(&ptable.lock);
+return 22;
+}
+
+int
+nice(int pid, int new_priority) {
+    struct proc *p;
+    int old_priority = -1;  // Initialize with -1 to handle cases where PID is not found
+
+    if (new_priority < 1 || new_priority > 5) {
+        return -1;  // Return -1 if the priority is out of range
+    }
+
+    acquire(&ptable.lock);  // Lock the process table
+
+    // Search for the process with the given pid
+    for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+        if (p->pid == pid) {
+            old_priority = p->priority;  // Save the current priority
+            p->priority = new_priority;  // Update to the new priority
+            break;
+        }
+    }
+
+    release(&ptable.lock);  // Release the lock
+
+    // Return the old priority if the process was found; otherwise, return -1
+    return (old_priority != -1) ? old_priority : -1;
 }

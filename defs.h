@@ -103,6 +103,8 @@ int             pipewrite(struct pipe*, char*, int);
 
 //PAGEBREAK: 16
 // proc.c
+int		        cps(void);
+int 		    nice(int pid, int priority);
 int             cpuid(void);
 void            exit(void);
 int             fork(void);
@@ -188,3 +190,4 @@ void            clearpteu(pde_t *pgdir, char *uva);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
+// #define ROUND_ROBIN

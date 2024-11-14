@@ -101,6 +101,7 @@ exec(char *path, char **argv)
   curproc->tf->esp = sp;
   switchuvm(curproc);
   freevm(oldpgdir);
+  curproc->priority = 2; //Giving child process default priority of 2
   return 0;
 
  bad:

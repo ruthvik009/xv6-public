@@ -37,6 +37,20 @@ sys_kill(void)
 }
 
 int
+sys_getstate(void) {
+    return myproc()->state;
+}
+
+int
+sys_yield(void)
+{
+    yield();  // Call the kernel yield function
+    return 0;
+}
+
+
+
+int
 sys_getpid(void)
 {
   return myproc()->pid;
@@ -88,4 +102,22 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+int
+sys_cps(void)
+{
+  return cps();
+}
+
+int
+sys_nice(void)
+{
+  int pid, pr;
+  if(argint(0, &pid) < 0)
+    return -1;
+  if(argint(1, &pr) < 0)
+    return -1;
+
+  return nice(pid, pr);
 }
